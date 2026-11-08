@@ -1,5 +1,11 @@
 name: Windows release
 on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag
+        required: true
+        type: string
   push:
     tags: ['v*']
 permissions:
@@ -7,8 +13,12 @@ permissions:
 jobs:
   release:
     runs-on: windows-2022
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
@@ -16,7 +26,7 @@ jobs:
         shell: pwsh
         run: |
           $version = ([xml](Get-Content -Raw src/Kroshka.csproj)).Project.PropertyGroup.Version
-          if ("v$version" -ne $env:GITHUB_REF_NAME) { throw "Tag and application version differ" }
+          if ("v$version" -ne $env:RELEASE_TAG) { throw "Tag and application version differ" }
           dotnet publish src/Kroshka.csproj -c Release -r win-x64 --self-contained true -o release-app --source https://api.nuget.org/v3/index.json -p:DebugType=None
       - name: Test
         shell: pwsh
@@ -28,10 +38,11 @@ jobs:
         shell: pwsh
         run: |
           $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
-          & $compiler ("/DAppVersion=" + $env:GITHUB_REF_NAME.Substring(1)) setup.iss
+          & $compiler ("/DAppVersion=" + $env:RELEASE_TAG.Substring(1)) setup.iss
           if ($LASTEXITCODE) { throw "Installer build failed" }
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
-        run: gh release create $env:GITHUB_REF_NAME (Get-Item dist/*.exe).FullName --verify-tag --title "Крошка $env:GITHUB_REF_NAME" --notes "Установщик для Windows x64. Включает .NET Desktop Runtime."
+        run: gh release create $env:RELEASE_TAG (Get-Item dist/*.exe).FullName --verify-tag --title "Крошка $env:RELEASE_TAG" --notes "Установщик для Windows x64. Включает .NET Desktop Runtime."
+
