@@ -4,16 +4,14 @@ namespace Kroshka;
 
 internal static class Glass
 {
-    // A static frosted surface with two soft Gaussian highlights and fine grain.
+    // A static frosted surface with two soft Gaussian highlights.
     // Only this small texture is generated; there is no animation or blur loop.
     static readonly Lazy<Bitmap> tile = new(() => {
         var bmp = new Bitmap(256,96);
-        var random = new Random(146);
         for (int y=0;y<bmp.Height;y++) for (int x=0;x<bmp.Width;x++) {
             double a = Math.Exp(-Math.Pow((x-42)/79.0,2)-Math.Pow((y+8)/74.0,2));
             double b = Math.Exp(-Math.Pow((x-238)/108.0,2)-Math.Pow((y-89)/87.0,2));
-            int grain = random.Next(-2,3);
-            bmp.SetPixel(x,y,Color.FromArgb(35+(int)(18*a+18*b)+grain,48+(int)(31*a+8*b)+grain,73+(int)(28*a+28*b)+grain));
+            bmp.SetPixel(x,y,Color.FromArgb(35+(int)(18*a+18*b),48+(int)(31*a+8*b),73+(int)(28*a+28*b)));
         }
         return bmp;
     });
@@ -44,8 +42,9 @@ internal sealed class HeaderIcon(bool settings) : SoftButton
             }
             outline.AddPolygon(teeth.ToArray()); g.DrawPath(pen,outline); g.DrawEllipse(pen,x-3,y-3,6,6);
             using var bow = new SolidBrush(Color.FromArgb(93,213,145));
+            var bowState=g.Save(); g.TranslateTransform(x+8,y-11); g.RotateTransform(45); g.TranslateTransform(-x-8,-y+11);
             g.FillPolygon(bow,new PointF[]{new(x+1,y-14),new(x+9,y-11),new(x+1,y-7)});
-            g.FillPolygon(bow,new PointF[]{new(x+16,y-15),new(x+8,y-11),new(x+16,y-7)});
+            g.FillPolygon(bow,new PointF[]{new(x+16,y-15),new(x+8,y-11),new(x+16,y-7)}); g.Restore(bowState);
         } else {
             g.DrawLine(pen,x,y-10,x,y+3); g.DrawLines(pen,new PointF[]{new(x-5,y-2),new(x,y+3),new(x+5,y-2)});
             g.DrawLines(pen,new PointF[]{new(x-8,y+4),new(x-8,y+8),new(x+8,y+8),new(x+8,y+4)});
@@ -75,10 +74,16 @@ internal static class Appearance
         c.ForeColor=Map(c.ForeColor,old); c.BackColor=Map(c.BackColor,old);
         c.Font=Theme.Font(c.Font.Size,c.Font.Bold);
         if(c is SoftButton b) b.Accent=Map(b.Accent,old);
+        if(c is GraphToggle toggle) toggle.FitShape();
         if(c is Form form) RetroDisplay.ApplyWindow(form);
         if(c is DataGridView grid) {
-            grid.BackgroundColor=Theme.Panel;grid.GridColor=Theme.Line;
+            grid.BackgroundColor=Theme.Surface;grid.GridColor=Theme.Line;
             Style(grid.DefaultCellStyle,old);Style(grid.ColumnHeadersDefaultCellStyle,old);
+            grid.ColumnHeadersDefaultCellStyle.BackColor=grid.ColumnHeadersDefaultCellStyle.SelectionBackColor=Theme.Panel;
+            grid.ColumnHeadersDefaultCellStyle.ForeColor=grid.ColumnHeadersDefaultCellStyle.SelectionForeColor=Theme.Muted;
+            grid.DefaultCellStyle.BackColor=Theme.Surface;grid.DefaultCellStyle.ForeColor=Theme.Ink;
+            grid.DefaultCellStyle.SelectionBackColor=Theme.Selection;grid.DefaultCellStyle.SelectionForeColor=Theme.Ink;
+            grid.RowsDefaultCellStyle=new DataGridViewCellStyle();grid.AlternatingRowsDefaultCellStyle=new DataGridViewCellStyle();
             foreach(DataGridViewRow row in grid.Rows) Row(row,old);
         }
         if(c.ContextMenuStrip is {} menu){menu.BackColor=Theme.Panel;menu.ForeColor=Theme.Ink;}
@@ -86,16 +91,18 @@ internal static class Appearance
         c.Invalidate();
     }
 }
-internal sealed class DriveButton : SoftButton
+internal class DriveButton : SoftButton
 {
+    protected virtual bool ShowDisk => true;
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);var g=e.Graphics;int y=Height/2;
         using var p=new Pen(Theme.Mint,1.6f);
-        g.DrawPolygon(p,new Point[]{new(12,y-6),new(26,y-6),new(30,y+1),new(9,y+1)});
-        g.DrawRectangle(p,9,y+1,21,6);g.DrawLine(p,23,y+4,26,y+4);
-        TextRenderer.DrawText(g,Text,Font,new Rectangle(38,0,Width-60,Height),ForeColor,
+        if(ShowDisk){g.DrawPolygon(p,new Point[]{new(12,y-6),new(26,y-6),new(30,y+1),new(9,y+1)});
+        g.DrawRectangle(p,9,y+1,21,6);g.DrawLine(p,23,y+4,26,y+4); }
+        TextRenderer.DrawText(g,Text,Font,new Rectangle(ShowDisk?38:9,0,Width-(ShowDisk?60:32),Height),ForeColor,
             TextFormatFlags.Left|TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis|TextFormatFlags.SingleLine);
         g.DrawLines(p,new Point[]{new(Width-19,y-2),new(Width-15,y+2),new(Width-11,y-2)});
     }
 }
+

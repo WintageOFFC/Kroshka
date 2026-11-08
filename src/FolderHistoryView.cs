@@ -62,8 +62,8 @@ internal sealed class FolderHistoryView : UserControl
         showRemoved.CheckedChanged += (_, _) => Render();
         explanation.SetToolTip(showRemoved, "Удалённые файлы скрыты в текущем периоде. Их история и исторические итоги сохранены. В прошлых периодах они всегда видны.");
         explanation.SetToolTip(comparison, "На диске — реальный замер свободного места Windows.\nВ таблице — оценка вклада файлов по их размерам.\nВезде плюс освобождает место, минус занимает.");
-        Grid.Dock = DockStyle.Fill; Grid.BackgroundColor = Theme.Panel; Grid.BorderStyle = BorderStyle.None;
-        Grid.EnableHeadersVisualStyles = false; Grid.ColumnHeadersDefaultCellStyle = new() { BackColor = Theme.Panel, ForeColor = Theme.Muted, Font = Theme.Font(9, true) };
+        Grid.Dock = DockStyle.Fill; Grid.BackgroundColor = Theme.Surface; Grid.BorderStyle = BorderStyle.None;
+        Grid.EnableHeadersVisualStyles = false; Grid.ColumnHeadersDefaultCellStyle = new() { BackColor = Theme.Panel, SelectionBackColor=Theme.Panel, SelectionForeColor=Theme.Muted, ForeColor = Theme.Muted, Font = Theme.Font(9, true) };
         Grid.DefaultCellStyle = new() { BackColor = Theme.Panel, ForeColor = Theme.Ink, SelectionBackColor = Theme.Line, SelectionForeColor = Theme.Mint, Font = Theme.Font(9) };
         Grid.GridColor = Theme.Line; Grid.RowTemplate.Height = 31; Grid.ColumnHeadersHeight = 32; Grid.RowHeadersVisible = false;
         Grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
@@ -208,6 +208,7 @@ internal sealed class FolderHistoryView : UserControl
     bool OnExpander(Node node)
     {
         int left = Grid.GetCellDisplayRectangle(0, Grid.CurrentRow?.Index ?? 0, false).Left;
+        if(Theme.Vintage) return Grid.PointToClient(Cursor.Position).X <= left+15+14*node.Depth;
         return Grid.PointToClient(Cursor.Position).X <= left + 5 + (node.Depth * 3 + 4) * TextRenderer.MeasureText(" ", Grid.DefaultCellStyle.Font, Size.Empty, TextFormatFlags.NoPadding).Width;
     }
     List<string> SelectedFiles() => Grid.SelectedRows.Cast<DataGridViewRow>()
@@ -248,8 +249,20 @@ internal sealed class FolderHistoryView : UserControl
     void UpdateAnimation() => animation.Enabled = Visible && Grid.Rows.Cast<DataGridViewRow>().Any(r => r.Tag is Node n && n.Loading);
     void PaintLoading(object? sender, DataGridViewCellPaintingEventArgs e)
     {
-        if (e.RowIndex < 0 || e.ColumnIndex != 0 || Grid.Rows[e.RowIndex].Tag is not Node n || !n.Loading) return;
-        e.Paint(e.ClipBounds, e.PaintParts); e.Handled = true;
+        if (e.RowIndex < 0 || e.ColumnIndex != 0 || Grid.Rows[e.RowIndex].Tag is not Node n) return;
+        if (Theme.Vintage && n.Entry.Directory) {
+            e.Paint(e.ClipBounds,e.PaintParts & ~DataGridViewPaintParts.ContentForeground); e.Handled=true;
+            var g=e.Graphics!; var box=e.CellBounds; int x=box.Left+5+14*n.Depth,y=box.Top+box.Height/2;
+            using var ink=new SolidBrush(Theme.Ink);
+            Point[] arrow=n.Expanded ? [new(x,y-2),new(x+8,y-2),new(x+4,y+3)] : [new(x+1,y-4),new(x+1,y+4),new(x+6,y)];
+            g.FillPolygon(ink,arrow); x+=13;
+            using var gold=new SolidBrush(Color.Gold);
+            g.FillRectangle(gold,x,y-5,7,4);g.FillRectangle(gold,x,y-3,15,10);g.DrawRectangle(Pens.SaddleBrown,x,y-3,15,10);
+            string title=n.Depth==0?n.Entry.Path.TrimEnd((char)92)+(char)92:Path.GetFileName(n.Entry.Path);
+            TextRenderer.DrawText(g,title,Grid.DefaultCellStyle.Font,new Rectangle(x+19,box.Top,Math.Max(1,box.Right-x-19),box.Height),Theme.Ink,TextFormatFlags.Left|TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis);
+        }
+        if (!n.Loading) return;
+        if (!e.Handled) { e.Paint(e.ClipBounds,e.PaintParts); e.Handled=true; }
         var area = new Rectangle(e.CellBounds.Right - 34, e.CellBounds.Top + 1, 29, 29);
         using var back = new SolidBrush(Grid.Rows[e.RowIndex].Selected ? Theme.Line : Theme.Panel); e.Graphics!.FillRectangle(back, area);
         LoadingMascot.Draw(e.Graphics, loadingMascot, area, frame * 15);
@@ -298,3 +311,4 @@ internal sealed class FolderHistoryView : UserControl
     }
     protected override void Dispose(bool disposing) { revision++; if (disposing) { animation.Dispose(); loadingMascot?.Dispose(); deleteIcon?.Dispose(); locationIcon?.Dispose(); explanation.Dispose(); Grid.ContextMenuStrip?.Dispose(); } base.Dispose(disposing); }
 }
+

@@ -13,9 +13,16 @@ internal sealed class HistoryTable
     {
         table.CellFormatting += (_, e) =>
         {
+            var style=e.CellStyle!;
+            style.BackColor=Theme.Surface; style.SelectionBackColor=Theme.Selection;
+            bool muted = table.Rows[e.RowIndex].Cells[e.ColumnIndex].HasStyle &&
+                         table.Rows[e.RowIndex].Cells[e.ColumnIndex].Style.ForeColor==Theme.Muted;
+            style.ForeColor=muted?Theme.Muted:Theme.Ink;
+            style.SelectionForeColor=Theme.Ink;
             string column = table.Columns[e.ColumnIndex].Name;
             if (IsSize(column) && e.Value is long bytes)
             {
+                if(column=="size") style.SelectionForeColor=style.ForeColor=bytes<0 ? Theme.Pink : Theme.Mint;
                 e.Value = Theme.Bytes(bytes, column == "size");
                 e.FormattingApplied = true;
             }

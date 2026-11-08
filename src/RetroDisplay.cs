@@ -27,7 +27,7 @@ internal static class RetroDisplay
             }
             x+=width+gap;
         }
-        using var suffixFont=Theme.Font(11,true);using var suffixBrush=new SolidBrush(Theme.Muted);g.DrawString(suffix,suffixFont,suffixBrush,x+6,y+height-19);
+        using var suffixFont=Theme.Font(11,true);using var suffixBrush=new SolidBrush(Theme.Vintage?Theme.Phosphor:Theme.Muted);g.DrawString(suffix,suffixFont,suffixBrush,x+6,y+height-19);
     }
     [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr hwnd,int attr,ref int value,int size);
     public static void Window(Form form)
@@ -36,7 +36,7 @@ internal static class RetroDisplay
     }
     public static void ApplyWindow(Form form)
         {
-            try { int dark=Theme.Style=="Vintage"?0:1,corners=Theme.Style=="Modern"?2:1,bg=ColorTranslator.ToWin32(Theme.Bg),ink=ColorTranslator.ToWin32(Theme.Mint),line=ColorTranslator.ToWin32(Theme.Line);
+            try { int dark=Theme.Style=="Vintage"?0:1,corners=Theme.Style=="Modern"?2:1,bg=ColorTranslator.ToWin32(Theme.Vintage?Color.Navy:Theme.Bg),ink=ColorTranslator.ToWin32(Theme.Vintage?Color.White:Theme.Mint),line=ColorTranslator.ToWin32(Theme.Line);
                 int backdrop=Theme.Style=="Modern"?3:1; DwmSetWindowAttribute(form.Handle,38,ref backdrop,4);
                 DwmSetWindowAttribute(form.Handle,33,ref corners,4);
                 DwmSetWindowAttribute(form.Handle,20,ref dark,4);DwmSetWindowAttribute(form.Handle,35,ref bg,4);DwmSetWindowAttribute(form.Handle,36,ref ink,4);DwmSetWindowAttribute(form.Handle,34,ref line,4);
@@ -55,7 +55,7 @@ internal sealed class LedTitle : Control
     public LedTitle(){DoubleBuffered=true;Size=new Size(295,42);AccessibleName="Крошка";}
     protected override void OnPaint(PaintEventArgs e)
     {
-        e.Graphics.Clear(Theme.Bg);using var on=new SolidBrush(Theme.Mint);using var off=new SolidBrush(Color.FromArgb(14,39,29));using var glow=new SolidBrush(Color.FromArgb(20,Theme.Mint));
+        e.Graphics.Clear(Theme.Vintage?Color.FromArgb(4,16,10):Theme.Bg);using var on=new SolidBrush(Theme.Phosphor);using var off=new SolidBrush(Color.FromArgb(14,39,29));using var glow=new SolidBrush(Color.FromArgb(20,Theme.Mint));
         float step=5f;for(int c=0;c<Glyphs.Length;c++)for(int i=0;i<35;i++)
         {float x=c*32+i%5*step,y=3+i/5*step;bool lit=Glyphs[c][i]=='1';if(lit)e.Graphics.FillRectangle(glow,x-1,y-1,6,6);e.Graphics.FillRectangle(lit?on:off,x,y,3.5f,3.5f);}
     }

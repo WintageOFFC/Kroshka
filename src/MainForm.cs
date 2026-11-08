@@ -18,13 +18,17 @@ internal static class Theme
     {
         Style = style is "Vintage" or "Modern" ? style : "Classic";
         string[] hex = Style switch {
-            "Vintage" => ["#bdbdb5","#deded5","#878983","#141721","#363b42","#002879","#164e43","#86320c"],
-            "Modern" => ["#172139","#293853","#475e7a","#f2f5ff","#bccbe0","#a3ecff","#d5c7ff","#ffbeaa"],
+            "Vintage" => ["#c0c0c0","#d4d0c8","#858585","#111111","#343434","#075f38","#13723a","#aa4100"],
+            "Modern" => ["#172139","#293853","#475e7a","#f2f5ff","#bccbe0","#a3ecff","#d5c7ff","#ffad78"],
             _ => []
         };
         var c = hex.Length == 0 ? Classic : hex.Select(ColorTranslator.FromHtml).ToArray();
         (Bg, Panel, Line, Ink, Muted, Mint, Lilac, Pink) = (c[0],c[1],c[2],c[3],c[4],c[5],c[6],c[7]);
     }
+    public static bool Vintage => Style == "Vintage";
+    public static Color Surface => Vintage ? Color.White : Panel;
+    public static Color Selection => Vintage ? Color.FromArgb(197,220,242) : Line;
+    public static Color Phosphor => Vintage ? Color.FromArgb(125,255,185) : Mint;
     public static Font Font(float n, bool bold = false) => new(Style switch { "Vintage" => "Tahoma", "Modern" => "Segoe UI", _ => "Consolas" }, n, bold ? FontStyle.Bold : FontStyle.Regular);
     public static string Bytes(long n, bool sign = false)
     {
@@ -49,13 +53,17 @@ internal class SoftButton : Button
     public SoftButton() { FlatStyle = FlatStyle.Flat; FlatAppearance.BorderSize = 0; ForeColor = Theme.Ink; Font = Theme.Font(10, true); Cursor = Cursors.Hand; Height = 38; }
     protected override void OnPaint(PaintEventArgs e)
     {
-        e.Graphics.Clear(Parent?.BackColor ?? Theme.Bg);
+        if (this is GraphToggle && Parent is Overview chart && Theme.Style=="Modern") {
+            var state=e.Graphics.Save();e.Graphics.TranslateTransform(-Left,-Top);
+            Glass.Paint(e.Graphics,new RectangleF(0,124,chart.Width,chart.Collapsed?40:188));
+            e.Graphics.Restore(state);
+        } else e.Graphics.Clear(Parent?.BackColor ?? Theme.Bg);
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
         using var p = Theme.Round(new RectangleF(0, 0, Width - 1, Height - 1), 10);
         using var b = new SolidBrush(Enabled ? Accent : Theme.Line); e.Graphics.FillPath(b, p);
         using var border = new Pen(Enabled ? (Focused ? Theme.Mint : Theme.Line) : Color.FromArgb(22,40,31));e.Graphics.DrawPath(border,p);
         if (Theme.Style == "Vintage") ControlPaint.DrawBorder3D(e.Graphics, ClientRectangle, Border3DStyle.Raised);
-        if (this is not DriveButton) TextRenderer.DrawText(e.Graphics, Text.ToUpperInvariant(), Font, ClientRectangle, Enabled ? ForeColor : Theme.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        if (this is not (DriveButton or ThemeTile or GraphToggle)) TextRenderer.DrawText(e.Graphics, Text.ToUpperInvariant(), Font, ClientRectangle, Enabled ? ForeColor : Theme.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         if (Focused) ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(ClientRectangle, -4, -4));
     }
 }
@@ -68,7 +76,7 @@ internal sealed class Overview : Control
     public bool ShowDates;
     public string FreeCaption = "СВОБОДНО НА ДИСКЕ", RamCaption = "ОПЕРАТИВНАЯ ПАМЯТЬ";
     public string? DeltaNote;
-    readonly SoftButton collapse = new() { Text = "−", Width = 30, Height = 26, AccessibleName = "Свернуть график" };
+    readonly GraphToggle collapse = new() { Text = "−", Width = 30, Height = 26, AccessibleName = "Свернуть график" };
     public bool Collapsed { get; private set; }
     bool loading;
     int loadingFrame;
@@ -83,7 +91,7 @@ internal sealed class Overview : Control
         loadingTimer.Tick += (_, _) => { loadingFrame = (loadingFrame + 1) % 24; Invalidate(new Rectangle(Math.Max(0, Width - 98), 129, 40, 38)); };
         VisibleChanged += (_, _) => loadingTimer.Enabled = loading && Visible;
         collapse.Click += (_, _) => SetCollapsed(!Collapsed);
-        Resize += (_, _) => collapse.Location = new Point(Math.Max(0, Width - 46), 135);
+        Resize += (_, _) => collapse.Location = new Point(Math.Max(0, Width - 46), 131);
     }
     public void SetCollapsed(bool value)
     {
@@ -92,12 +100,15 @@ internal sealed class Overview : Control
         Invalidate(); CollapseChanged?.Invoke(this, EventArgs.Empty);
     }
     void TextAt(Graphics g, string text, float size, Color color, float x, float y, bool bold = false)
-    { if(size>=25 && Theme.Style == "Classic"){RetroDisplay.Number(g,text,x,y,35,color);return;}using var f = Theme.Font(size, bold); using var b = new SolidBrush(color); g.DrawString(text, f, b, x, y); }
+    { if (Theme.Vintage) color = color == Theme.Pink ? Color.SandyBrown : Theme.Phosphor; if(size>=25 && Theme.Style != "Modern"){RetroDisplay.Number(g,text,x,y,35,color);return;}using var f = Theme.Font(size, bold); using var b = new SolidBrush(color); g.DrawString(text, f, b, x, y); }
     void Card(Graphics g, RectangleF r)
     {
         if (Theme.Style == "Modern") { Glass.Paint(g,r); return; }
         if (Theme.Style == "Vintage") {
-            using var fill = new SolidBrush(Theme.Panel); g.FillRectangle(fill,r);
+            using var fill = new SolidBrush(Color.FromArgb(3,19,11)); g.FillRectangle(fill,r);
+            using var vintageLines = new Pen(Color.FromArgb(10,Theme.Phosphor));
+            for (float y=r.Top+4;y<r.Bottom-2;y+=4) g.DrawLine(vintageLines,r.Left+2,y,r.Right-2,y);
+            if (r.Top>0) { using var head = new SolidBrush(Theme.Bg); g.FillRectangle(head,r.Left+2,r.Top+2,r.Width-4,36); }
             ControlPaint.DrawBorder3D(g,Rectangle.Round(r),Border3DStyle.Sunken); return;
         }
         using var b = new SolidBrush(Theme.Panel);g.FillRectangle(b,r);using var pen=new Pen(Theme.Line);g.DrawRectangle(pen,r.X+.5f,r.Y+.5f,r.Width-1,r.Height-1);
@@ -122,8 +133,10 @@ internal sealed class Overview : Control
         TextAt(g, Current == null ? "—" : Theme.Bytes(Current.Ram), 25, Theme.Lilac, x3 - 2, 37, true);
         TextAt(g, Current == null ? "" : "занято из " + Theme.Bytes(Current.RamTotal), 9, Theme.Muted, x3, 83);
         Card(g, new RectangleF(0, 124, w, Collapsed ? 40 : 188));
-        TextAt(g, "Как менялось свободное место", 12, Theme.Ink, 20, 139, true);
-        TextAt(g, loading ? "Обновляю данные…" : Period, 9, Theme.Muted, w - 320, 142);
+        const TextFormatFlags align=TextFormatFlags.VerticalCenter|TextFormatFlags.SingleLine|TextFormatFlags.Left|TextFormatFlags.NoPadding;
+        using var heading=Theme.Font(12,true); using var note=Theme.Font(9);
+        TextRenderer.DrawText(g,"Как менялось свободное место",heading,new Rectangle(20,124,Width-345,40),Theme.Ink,align);
+        TextRenderer.DrawText(g,loading ? "Обновляю данные…" : Period,note,new Rectangle(Width-320,124,220,40),Theme.Muted,align);
         if (loading) LoadingMascot.Draw(g, loadingImage, new Rectangle((int)w - 94, 131, 32, 32), loadingFrame * 15);
         if (Collapsed) return;
         var plot = new RectangleF(24, 183, w - 184, 91);
@@ -135,21 +148,21 @@ internal sealed class Overview : Control
             double range = Math.Max(256L << 20, max - min); double low = min - range * .12; range *= 1.24;
             long t0 = (long)Points[0][0]!, t1 = (long)Points[^1][0]!;
             var pts = Points.Select(r => new PointF(Points.Count == 1 ? plot.Right : plot.Left + (float)(((long)r[0]! - t0) / (double)Math.Max(1, t1 - t0) * plot.Width), plot.Bottom - (float)(((long)r[1]! - low) / range * plot.Height))).ToArray();
-            using var pen = new Pen(Theme.Mint, 1.8f);using var glow = new Pen(Color.FromArgb(35,Theme.Mint),7);
+            using var pen = new Pen(Theme.Phosphor, 1.8f);using var glow = new Pen(Color.FromArgb(35,Theme.Phosphor),7);
             for (int i = 1; i < pts.Length; i++)
-            { if ((long)Points[i][0]! - (long)Points[i - 1][0]! < MaximumGap) {g.DrawLine(glow,pts[i-1],pts[i]);g.DrawLine(pen, pts[i - 1], pts[i]);} else { using var dot = new SolidBrush(Theme.Mint); g.FillEllipse(dot, pts[i].X - 2, pts[i].Y - 2, 4, 4); } }
+            { if ((long)Points[i][0]! - (long)Points[i - 1][0]! < MaximumGap) {g.DrawLine(glow,pts[i-1],pts[i]);g.DrawLine(pen, pts[i - 1], pts[i]);} else { using var dot = new SolidBrush(Theme.Phosphor); g.FillEllipse(dot, pts[i].X - 2, pts[i].Y - 2, 4, 4); } }
             // The badge uses the plotted sample, never an independently refreshed live value.
             var last = pts[^1];
-            using var level = new Pen(Color.FromArgb(70, Theme.Mint)) { DashStyle = DashStyle.Dot };
+            using var level = new Pen(Color.FromArgb(70, Theme.Phosphor)) { DashStyle = DashStyle.Dot };
             g.DrawLine(level, plot.Left, last.Y, plot.Right, last.Y);
-            using var halo = new SolidBrush(Color.FromArgb(45, Theme.Mint)); using var dotInk = new SolidBrush(Theme.Mint);
+            using var halo = new SolidBrush(Color.FromArgb(45, Theme.Phosphor)); using var dotInk = new SolidBrush(Theme.Phosphor);
             g.FillEllipse(halo, last.X - 6, last.Y - 6, 12, 12); g.FillEllipse(dotInk, last.X - 3, last.Y - 3, 6, 6);
             float badgeY = Math.Clamp(last.Y - 21, plot.Top, plot.Bottom - 42);
             var badge = new RectangleF(plot.Right + 12, badgeY, 134, 42);
-            using var badgeBg = new SolidBrush(Theme.Bg); using var badgeBorder = new Pen(Theme.Mint);
+            using var badgeBg = new SolidBrush(Theme.Vintage ? Color.Black : Theme.Bg); using var badgeBorder = new Pen(Theme.Phosphor);
             g.FillRectangle(badgeBg, badge); g.DrawRectangle(badgeBorder, badge.X, badge.Y, badge.Width, badge.Height);
             g.DrawLine(badgeBorder, last.X + 4, last.Y, badge.Left, badge.Top + badge.Height / 2);
-            TextAt(g, Theme.Bytes((long)Points[^1][1]!), 11, Theme.Mint, badge.Left + 7, badge.Top + 3, true);
+            TextAt(g, Theme.Bytes((long)Points[^1][1]!), 11, Theme.Phosphor, badge.Left + 7, badge.Top + 3, true);
             TextAt(g, HistoryPeriod.Local(t1).ToString(ShowDates ? "dd.MM HH:mm" : "HH:mm:ss") + " · замер", 8, Theme.Muted, badge.Left + 7, badge.Top + 24);
             TextAt(g, Theme.Bytes((long)(low + range)), 8, Theme.Muted, plot.Right + 12, plot.Top - 17);
             TextAt(g, Theme.Bytes((long)low), 8, Theme.Muted, plot.Right + 12, plot.Bottom + 10);
@@ -170,7 +183,7 @@ internal sealed class MainForm : Form
     readonly Overview overview = new();
     readonly RetroDatePicker day = new() { Width = 130, Height = 30, AccessibleName = "Начало периода" };
     readonly RetroDatePicker endDay = new() { Width = 130, Height = 30, AccessibleName = "Конец периода" };
-    readonly ComboBox mode = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 180 };
+    readonly ModePicker mode = new() { Width=180, Height=30, AccessibleName="Представление истории" };
     readonly TextBox search = new() { PlaceholderText = "Найти файл или папку…", Width = 195, BorderStyle = BorderStyle.FixedSingle };
     readonly FolderHistoryView folderTree = new() { Visible = false };
     readonly Label periodHint = new() { AutoSize = true, ForeColor = Theme.Muted, Padding = new Padding(12, 7, 0, 0), Font = Theme.Font(8.5f) };
@@ -211,10 +224,10 @@ internal sealed class MainForm : Form
         RetroDisplay.Window(this);
         Font = Theme.Font(10); ClientSize = new Size(1100, 830); MinimumSize = new Size(1040, 780); StartPosition = FormStartPosition.CenterScreen;
         Icon = MakeIcon();
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(24, 16, 24, 18), RowCount = 8, ColumnCount = 1, BackColor = Theme.Bg };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(24, 16, 24, 18), RowCount = 7, ColumnCount = 1, BackColor = Theme.Bg };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 77)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 325));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); Controls.Add(root);
         var header = new Panel { Dock = DockStyle.Fill };
         header.Paint += (_, e) => { if (mascot != null) { e.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic; e.Graphics.DrawImage(mascot, new Rectangle(0, 0, 70, 70)); } else DrawMascot(e.Graphics, 6, 4); };
@@ -272,16 +285,13 @@ internal sealed class MainForm : Form
         var filters = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 34, WrapContents = false, Padding = Padding.Empty };
         var label = new Label { Text = "С", AutoSize = false, Width = 18, Height = 30, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Theme.Ink };
         var endLabel = new Label { Text = "по", AutoSize = false, Width = 32, Height = 30, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Theme.Ink };
-        mode.Items.AddRange(["По файлам", "По папкам", "Системные размеры", "Журнал наблюдения", "Дерево папок"]); mode.SelectedIndex = 0;
-        mode.BackColor = search.BackColor = Theme.Panel; mode.ForeColor = search.ForeColor = Theme.Ink; mode.FlatStyle = FlatStyle.Flat;
+        search.BackColor=Theme.Surface; search.ForeColor=Theme.Ink;
         var export = new SoftButton { Text = "Экспорт CSV", Width = 120, Height = 30 }; export.Click += (_, _) => Export();
         var searchBox = new Panel { Width = search.Width, Height = 30, BackColor = Theme.Panel };
         search.BorderStyle = BorderStyle.None; search.AutoSize = true;
         void AlignSearch() { search.SetBounds(7,(searchBox.ClientSize.Height-search.PreferredHeight)/2,searchBox.ClientSize.Width-14,search.PreferredHeight); }
         searchBox.Controls.Add(search); searchBox.Resize += (_,_) => AlignSearch(); search.FontChanged += (_,_) => AlignSearch(); AlignSearch();
         searchBox.Paint += (_,e) => { using var pen = new Pen(Theme.Line); e.Graphics.DrawRectangle(pen,0,0,searchBox.Width-1,searchBox.Height-1); };
-        mode.DrawMode = DrawMode.OwnerDrawFixed; mode.ItemHeight = 24;
-        mode.DrawItem += (_, e) => { e.DrawBackground(); if (e.Index >= 0) TextRenderer.DrawText(e.Graphics, mode.Items[e.Index]!.ToString(), mode.Font, e.Bounds, Theme.Ink, TextFormatFlags.Left | TextFormatFlags.VerticalCenter); };
         foreach (Control control in new Control[] { label, day, endLabel, endDay, mode, searchBox, export }) control.Margin = new Padding(0, 0, 6, 0);
         filters.Controls.AddRange([label, day, endLabel, endDay, mode, searchBox, export]);
         filterHost.Controls.Add(filters); filterHost.Controls.Add(periods); root.Controls.Add(filterHost, 0, 2);
@@ -303,17 +313,15 @@ internal sealed class MainForm : Form
             else throw new IOException("Наблюдатель диска недоступен.");
         };
         folderTree.SnapshotChanged += (_, _) => { if (!IsDisposed && mode.SelectedIndex == 4) ApplyTreeComparison(); };
-        var hint = new Label { Text = "+ освободилось   ·   − занялось", Dock = DockStyle.Fill, ForeColor = Theme.Muted, Font = Theme.Font(8.5f), TextAlign = ContentAlignment.MiddleLeft };
-        root.Controls.Add(hint, 0, 4);
-        scanProgress.Dock = DockStyle.Fill; scanProgress.Visible = false; root.Controls.Add(scanProgress, 0, 5);
+        scanProgress.Dock = DockStyle.Fill; scanProgress.Visible = false; root.Controls.Add(scanProgress, 0, 4);
         var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Padding = new Padding(0, 5, 0, 9), Margin = Padding.Empty };
         start.Height = pause.Height = scan.Height = 40;
         start.Click += (_, _) => StartMonitoring(); pause.Click += (_, _) => { monitor.TogglePause(); pause.Text = monitor.Paused ? "Продолжить" : "Пауза"; RefreshView(); };
         scan.Click += (_, _) => { monitor.RequestScan(); RefreshView(); };
         var trayButton = new SoftButton { Text = "Свернуть в трей", Width = 164, Height = 40 }; trayButton.Click += (_, _) => Hide();
         foreach (var b in new[] { start, pause, scan, trayButton }) b.Margin = new Padding(0, 0, 10, 0);
-        actions.Controls.AddRange([start, pause, scan, trayButton]); root.Controls.Add(actions, 0, 6);
-        health.Dock = DockStyle.Fill; health.AutoSize = true; health.MinimumSize = new Size(0, 23); health.ForeColor = Theme.Muted; health.Font = Theme.Font(8); health.TextAlign = ContentAlignment.MiddleLeft; root.Controls.Add(health, 0, 7);
+        actions.Controls.AddRange([start, pause, scan, trayButton]); root.Controls.Add(actions, 0, 5);
+        health.Dock = DockStyle.Fill; health.AutoSize = true; health.MinimumSize = new Size(0, 23); health.ForeColor = Theme.Muted; health.Font = Theme.Font(8); health.TextAlign = ContentAlignment.MiddleLeft; root.Controls.Add(health, 0, 6);
         tray = new NotifyIcon { Text = "Крошка · история диска", Icon = Icon, Visible = true };
         tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) Open(); };
         var menu = new ContextMenuStrip { BackColor = Theme.Panel, ForeColor = Theme.Ink, Font = Theme.Font(10), Renderer = new ToolStripProfessionalRenderer(new RetroMenuColors()) { RoundedEdges = false } }; menu.Items.Add("Открыть Крошку", null, (_, _) => Open());
@@ -439,8 +447,8 @@ internal sealed class MainForm : Form
     {
         HistoryTable.AttachFormatting(table);
         table.BackgroundColor = Theme.Panel; table.BorderStyle = BorderStyle.None; table.EnableHeadersVisualStyles = false;
-        table.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle { BackColor = Theme.Panel, ForeColor = Theme.Muted, Font = Theme.Font(9, true), Padding = new Padding(10, 0, 0, 0) };
-        table.DefaultCellStyle = new DataGridViewCellStyle { BackColor = Theme.Panel, ForeColor = Theme.Ink, SelectionBackColor = Color.FromArgb(28, 65, 48), SelectionForeColor = Theme.Mint, Font = Theme.Font(9), Padding = new Padding(10, 0, 0, 0) };
+        table.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle { BackColor = Theme.Panel, SelectionBackColor=Theme.Panel, SelectionForeColor=Theme.Muted, ForeColor = Theme.Muted, Font = Theme.Font(9, true), Padding = new Padding(10, 0, 0, 0) };
+        table.DefaultCellStyle = new DataGridViewCellStyle { BackColor = Theme.Panel, ForeColor = Theme.Ink, SelectionBackColor = Theme.Selection, SelectionForeColor = Theme.Mint, Font = Theme.Font(9), Padding = new Padding(10, 0, 0, 0) };
         table.GridColor = Theme.Line; table.RowTemplate.Height = 43; table.ColumnHeadersHeight = 36; table.RowHeadersVisible = false;
         table.AllowUserToAddRows = false; table.AllowUserToDeleteRows = false; table.ReadOnly = true; table.MultiSelect = false;
         table.SelectionMode = DataGridViewSelectionMode.FullRowSelect; table.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
@@ -612,7 +620,7 @@ internal sealed class MainForm : Form
     }
     void ShowSettings()
     {
-        using var f = new Form { Text = "Крошка · настройки", BackColor = Theme.Bg, ForeColor = Theme.Ink, Font = Theme.Font(10), ClientSize = new Size(730, 594), StartPosition = FormStartPosition.CenterParent, MaximizeBox = false };
+        using var f = new Form { Text = "Крошка · настройки", BackColor = Theme.Bg, ForeColor = Theme.Ink, Font = Theme.Font(10), ClientSize = new Size(730, 622), StartPosition = FormStartPosition.CenterParent, MaximizeBox = false };
         RetroDisplay.Window(f);
         var startup = new Label { Text = "Автозапуск настраивается вручную через Windows (shell:startup).", AutoSize = true, Location = new Point(26, 25), ForeColor = Theme.Muted };
         var info = new Label { Text = "Наблюдаем: " + monitor.Config.Root + "\n\n• Место на диске и ОЗУ: один замер в минуту.\n• Изменения файлов: пакетами, с интервалами по 5 минут.\n• Полный обход: первая карта и только по кнопке «Сверить».\n• История: 1 год. Удаление файлов — только с подтверждением.\n• Содержимое файлов не читается и никуда не отправляется.\n\nСканирование: два потока, пакетная запись, без искусственных пауз.\nИндекс занимает место: обычно десятки или сотни МБ.\nПосле перерыва возможны пропуски истории; они отмечаются явно.\nЗакрытые папки и ссылки пропускаются; график учитывает весь диск.\n\nСумма логических размеров отличается от физически занятого места\nиз-за сжатия, разреженных файлов, жёстких ссылок и служебных данных.\nПеремещение: плюс у старого пути, минус у нового.", Location = new Point(26, 65), Size = new Size(680, 330), ForeColor = Theme.Muted };
@@ -640,20 +648,21 @@ internal sealed class MainForm : Form
         };
         var folder = new SoftButton { Text = "Папка истории", Width = 170, Location = new Point(272, 410) }; folder.Click += (_, _) => OpenFolder(f, monitor.DataDir);
         var foot = new Label { Text = "Для замера теневых копий Windows покажет запрос администратора.\nЗакрытие окна оставляет Крошку в трее. Выход — через меню значка.", Location = new Point(26, 467), Size = new Size(680, 50), ForeColor = Theme.Muted, Font = Theme.Font(9) };
-        var themeTitle = new Label { Text="Тема", AutoSize=true, Location=new Point(26,543) };
-        var styles = new ComboBox { DropDownStyle=ComboBoxStyle.DropDownList, Location=new Point(95,538), Width=230 };
-        string[] ids = ["Classic","Vintage","Modern"];
-        styles.Items.AddRange(["Классическая зелёная","Винтаж · Windows 98","Модерн · стекло"]);
-        styles.SelectedIndex = Array.IndexOf(ids,Theme.Style);
-        styles.SelectionChangeCommitted += (_,_) => {
-            var old = Theme.Colors(); primary.Config.Appearance = ids[styles.SelectedIndex];
-            if (!Program.Preview) primary.Config.Save(primary.DataDir);
-            Theme.Select(primary.Config.Appearance);
-            Appearance.Apply(this,old); Appearance.Apply(f,old);
-            foreach (var row in tableData) Appearance.Row(row,old);
-            folderTree.Restyle(); UpdatePeriodButtons();
-        };
-        f.Controls.AddRange([startup, info, system, folder, foot,themeTitle,styles]); f.ShowDialog(this);
+        var themeTitle = new Label { Text="Тема",AutoSize=true,Location=new Point(26,532) };
+        var picker = new FlowLayoutPanel { Location=new Point(90,520),Size=new Size(612,87),WrapContents=false };
+        foreach (var (id,label) in new[]{("Classic","Классика"),("Vintage","Винтаж"),("Modern","Модерн")}) {
+            var tile=new ThemeTile(id,label); picker.Controls.Add(tile);
+            tile.Click += (_,_) => {
+                if(Theme.Style==id) return;
+                var old=Theme.Colors(); primary.Config.Appearance=id;
+                if(!Program.Preview) primary.Config.Save(primary.DataDir);
+                Theme.Select(id); Appearance.Apply(this,old); Appearance.Apply(f,old);
+                foreach(var row in tableData) Appearance.Row(row,old);
+                search.BackColor=search.Parent!.BackColor=Theme.Surface;
+                folderTree.Restyle(); UpdatePeriodButtons();
+            };
+        }
+        f.Controls.AddRange([startup,info,system,folder,foot,themeTitle,picker]); f.ShowDialog(this);
     }
     static void OpenFolder(IWin32Window owner, string path)
     {
@@ -667,6 +676,7 @@ internal sealed class MainForm : Form
         catch (Exception ex) { MessageBox.Show(owner, "Не удалось открыть папку:\n" + ex.Message, "Крошка", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
     }
 }
+
 
 
 
