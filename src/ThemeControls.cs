@@ -23,22 +23,43 @@ internal sealed class GraphToggle : SoftButton
 internal sealed class ModePicker : DriveButton
 {
     static readonly string[] Labels=["По файлам","По папкам","Системные размеры","Журнал наблюдения","Дерево папок"];
-    int selected;
+    readonly ContextMenuStrip menu=MenuArt.Create();
+    int selected=4;
     protected override bool ShowDisk => false;
     public event EventHandler? SelectedIndexChanged;
     public int SelectedIndex {
         get => selected;
-        set { if(value==selected)return; selected=value;Text=Labels[value];SelectedIndexChanged?.Invoke(this,EventArgs.Empty); }
+        set {
+            if(value==selected)return;
+            selected=value;
+            Text=Labels[value];
+            SelectedIndexChanged?.Invoke(this,EventArgs.Empty);
+        }
     }
-    public ModePicker(){Text=Labels[0];}
-    protected override void OnClick(EventArgs e)
+    public ModePicker()
     {
-        base.OnClick(e); var menu=MenuArt.Create();menu.ShowCheckMargin=true;menu.ShowImageMargin=false;
+        Text=Labels[selected];
+        menu.ShowCheckMargin=true;
+        menu.ShowImageMargin=false;
         for(int i=0;i<Labels.Length;i++) {
             int index=i;
-            menu.Items.Add(new ToolStripMenuItem(Labels[i],null,(_,_)=>SelectedIndex=index){Checked=index==selected});
+            menu.Items.Add(new ToolStripMenuItem(Labels[i],null,(_,_)=>SelectedIndex=index));
         }
-        menu.Closed+=(_,_)=>menu.Dispose();menu.Show(this,0,Height);
+    }
+    protected override void OnClick(EventArgs e)
+    {
+        base.OnClick(e);
+        menu.ForeColor=Theme.Ink;
+        menu.BackColor=Theme.Panel;
+        menu.Font=Font;
+        for (int i=0;i<menu.Items.Count;i++)
+            ((ToolStripMenuItem)menu.Items[i]).Checked=i==selected;
+        menu.Show(this,0,Height);
+    }
+    protected override void Dispose(bool disposing)
+    {
+        if(disposing)menu.Dispose();
+        base.Dispose(disposing);
     }
 }
 internal sealed class ThemeTile : SoftButton

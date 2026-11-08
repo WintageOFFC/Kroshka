@@ -30,7 +30,7 @@ internal sealed class FolderHistoryView : UserControl
     const int PageSize = 250;
     sealed record More(Node Parent);
     readonly SoftButton reload = new() { Text = "Обновить", Width = 112, Dock = DockStyle.Right, Height = 30 };
-    readonly Label comparison = new() { Dock = DockStyle.Fill, ForeColor = Theme.Mint, Font = Theme.Font(9), TextAlign = ContentAlignment.MiddleLeft };
+    readonly Label comparison = new() { AutoEllipsis=true, Dock = DockStyle.Fill, ForeColor = Theme.Mint, Font = Theme.Font(9), TextAlign = ContentAlignment.MiddleLeft };
     readonly ToolTip explanation = new();
     readonly System.Windows.Forms.Timer animation = new() { Interval = 100 };
     readonly Image? loadingMascot = LoadingMascot.Load();
@@ -54,11 +54,13 @@ internal sealed class FolderHistoryView : UserControl
     bool descending = true;
     readonly SemaphoreSlim reads = new(1, 1);
 
+    public Control Summary => comparison;
+    public Control RemovedFilter => showRemoved;
+    public Control RefreshButton => reload;
+
     public FolderHistoryView()
     {
         Dock = DockStyle.Fill; BackColor = Theme.Bg;
-        var top = new Panel { Dock = DockStyle.Top, Height = 38, Padding = new Padding(0, 0, 0, 6) };
-        top.Controls.Add(comparison); top.Controls.Add(showRemoved); top.Controls.Add(reload);
         showRemoved.CheckedChanged += (_, _) => Render();
         explanation.SetToolTip(showRemoved, "Удалённые файлы скрыты в текущем периоде. Их история и исторические итоги сохранены. В прошлых периодах они всегда видны.");
         explanation.SetToolTip(comparison, "На диске — реальный замер свободного места Windows.\nВ таблице — оценка вклада файлов по их размерам.\nВезде плюс освобождает место, минус занимает.");
@@ -75,7 +77,7 @@ internal sealed class FolderHistoryView : UserControl
         Grid.Columns[0].FillWeight = 55;
         foreach (DataGridViewColumn c in Grid.Columns) { c.SortMode = DataGridViewColumnSortMode.Programmatic; if (c.Index > 0) { c.ValueType = typeof(long); c.DefaultCellStyle.NullValue = "Нет данных"; c.FillWeight = 15; c.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft; c.DefaultCellStyle.Padding = new Padding(0); } }
         HistoryTable.AttachFormatting(Grid);
-        Controls.Add(Grid); Controls.Add(top);
+        Controls.Add(Grid);
         Grid.CellClick += async (_, e) =>
         {
             if (e.RowIndex < 0 || e.ColumnIndex != 0 || ModifierKeys != Keys.None) return;

@@ -8,7 +8,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>../assets/kroshka.ico</ApplicationIcon>
     <AssemblyName>Kroshka</AssemblyName>
-    <Version>1.4.7</Version>
+    <Version>1.4.8</Version>
     <PlatformTarget>x64</PlatformTarget>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <RestoreIgnoreFailedSources>true</RestoreIgnoreFailedSources>

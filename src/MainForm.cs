@@ -209,9 +209,8 @@ internal sealed class MainForm : Form
     long earliestSample = Store.Now;
     List<DataGridViewRow> tableData = new();
     readonly Dictionary<int, (int Column, bool Descending)> tableSorts = new();
-    readonly Panel tableToolbar = new() { Dock = DockStyle.Top, Height = 38, Padding = new Padding(0, 0, 0, 6) };
     readonly SoftButton refreshTable = new() { Text = "Обновить", Dock = DockStyle.Right, Width = 112 };
-    readonly Panel tablePager = new() { Dock = DockStyle.Bottom, Height = 34 };
+    readonly Panel tablePager = new() { Dock = DockStyle.Bottom, Height = 41, Padding=new Padding(0,7,0,0) };
     readonly Label pageLabel = new() { AutoSize = false, Width = 220, Height = 30, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Theme.Muted };
     readonly SoftButton prevPage = new() { Text = "←", Width = 45, Height = 28 };
     readonly SoftButton nextPage = new() { Text = "→", Width = 45, Height = 28 };
@@ -275,14 +274,18 @@ internal sealed class MainForm : Form
         };
         overview.SetCollapsed(monitor.Config.GraphCollapsed);
         var filterHost = new Panel { Dock = DockStyle.Fill };
-        var periods = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 38, WrapContents = false };
+        var periodRow = new Panel { Dock=DockStyle.Top, Height=32 };
+        var periods = new FlowLayoutPanel { Dock=DockStyle.Left, AutoSize=true, AutoSizeMode=AutoSizeMode.GrowAndShrink, WrapContents=false };
+        periodRow.Controls.Add(folderTree.Summary);
+        periodRow.Controls.Add(periods);
         foreach (string p in new[] { "1D", "1W", "1M", "3M", "1Y", "ALL" })
         {
             var button = new SoftButton { Text = p, Width = 52, Height = 30, Margin = new Padding(0, 0, 6, 0) };
             periodButtons[p] = button; button.Click += (_, _) => SelectPeriod(p); periods.Controls.Add(button);
         }
         periods.Controls.Add(periodHint);
-        var filters = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 34, WrapContents = false, Padding = Padding.Empty };
+        var filterRow = new Panel { Dock=DockStyle.Bottom, Height=34 };
+        var filters = new FlowLayoutPanel { Dock = DockStyle.Fill, Height = 34, WrapContents = false, Padding = Padding.Empty };
         var label = new Label { Text = "С", AutoSize = false, Width = 18, Height = 30, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Theme.Ink };
         var endLabel = new Label { Text = "по", AutoSize = false, Width = 32, Height = 30, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Theme.Ink };
         search.BackColor=Theme.Surface; search.ForeColor=Theme.Ink;
@@ -293,12 +296,21 @@ internal sealed class MainForm : Form
         searchBox.Controls.Add(search); searchBox.Resize += (_,_) => AlignSearch(); search.FontChanged += (_,_) => AlignSearch(); AlignSearch();
         searchBox.Paint += (_,e) => { using var pen = new Pen(Theme.Line); e.Graphics.DrawRectangle(pen,0,0,searchBox.Width-1,searchBox.Height-1); };
         foreach (Control control in new Control[] { label, day, endLabel, endDay, mode, searchBox, export }) control.Margin = new Padding(0, 0, 6, 0);
-        filters.Controls.AddRange([label, day, endLabel, endDay, mode, searchBox, export]);
-        filterHost.Controls.Add(filters); filterHost.Controls.Add(periods); root.Controls.Add(filterHost, 0, 2);
+        folderTree.RemovedFilter.Dock=DockStyle.None;
+        folderTree.RemovedFilter.Size=searchBox.Size;
+        folderTree.RemovedFilter.Margin=searchBox.Margin;
+        filters.Controls.AddRange([label, day, endLabel, endDay, mode, searchBox, folderTree.RemovedFilter, export]);
+        var refreshSlot=new Panel { Dock=DockStyle.Right, Width=112, Padding=new Padding(0,0,0,4) };
+        refreshTable.Dock=folderTree.RefreshButton.Dock=DockStyle.Fill;
+        refreshSlot.Controls.Add(refreshTable);
+        refreshSlot.Controls.Add(folderTree.RefreshButton);
+        filterRow.Controls.Add(filters);
+        filterRow.Controls.Add(refreshSlot);
+        filterHost.Controls.Add(filterRow); filterHost.Controls.Add(periodRow); root.Controls.Add(filterHost, 0, 2);
         StyleTable(); var tablePanel = new Panel { Dock = DockStyle.Fill }; table.Dock = DockStyle.Fill;
         empty.Dock = DockStyle.Fill; empty.TextAlign = ContentAlignment.MiddleCenter; empty.ForeColor = Theme.Muted; empty.Font = Theme.Font(12);
-        tablePanel.Controls.Add(table); tablePanel.Controls.Add(tablePager); tablePanel.Controls.Add(tableToolbar);
-        tableToolbar.Controls.Add(refreshTable); refreshTable.Click += (_, _) => RefreshView(); tablePanel.Controls.Add(empty);
+        tablePanel.Controls.Add(table); tablePanel.Controls.Add(tablePager);
+        refreshTable.Click += (_, _) => RefreshView(); tablePanel.Controls.Add(empty);
         var pagerFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
         pagerFlow.Controls.AddRange([prevPage, pageLabel, nextPage]); tablePager.Controls.Add(pagerFlow);
         prevPage.Click += (_, _) => { tablePage--; RenderTablePage(); };
@@ -350,7 +362,16 @@ internal sealed class MainForm : Form
             updatingDates = true; if (endDay.Value < day.Value) day.Value = endDay.Value;
             preset = "CUSTOM"; updatingDates = false; UpdatePeriodButtons(); RefreshView();
         };
-        mode.SelectedIndexChanged += (_, _) => RefreshView(); UpdatePeriodButtons();
+        void ShowModeControls()
+        {
+            bool tree=mode.SelectedIndex==4;
+            folderTree.Summary.Visible=folderTree.RemovedFilter.Visible=folderTree.RefreshButton.Visible=tree;
+            searchBox.Visible=refreshTable.Visible=!tree;
+            table.Visible=tablePager.Visible=!tree;
+            folderTree.Visible=tree;
+        }
+        ShowModeControls();
+        mode.SelectedIndexChanged += (_, _) => { ShowModeControls(); RefreshView(); }; UpdatePeriodButtons();
         search.TextChanged += (_, _) => { debounce.Stop(); debounce.Start(); }; debounce.Tick += (_, _) => { debounce.Stop(); RefreshView(); };
         refresh.Tick += (_, _) => { if (Visible) RefreshView(false); }; refresh.Start();
         progressRefresh.Tick += (_, _) => RefreshProgress();
@@ -482,7 +503,7 @@ internal sealed class MainForm : Form
             int selectedMode = mode.SelectedIndex; string filter = search.Text.Trim();
             periodHint.Text = $"История с {HistoryPeriod.Local(earliest):dd.MM.yy HH:mm}";
             search.Enabled = selectedMode != 4;
-            folderTree.Visible = selectedMode == 4; table.Visible = selectedMode != 4; tablePager.Visible = selectedMode != 4; tableToolbar.Visible = selectedMode != 4;
+            folderTree.Visible = selectedMode == 4; table.Visible = selectedMode != 4; tablePager.Visible = selectedMode != 4;
             if (selectedMode == 4)
             {
                 empty.Visible = false; folderTree.BringToFront();
