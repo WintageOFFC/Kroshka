@@ -33,7 +33,7 @@ internal static class Theme
     public static string Bytes(long n, bool sign = false)
     {
         string prefix = sign && n > 0 ? "+" : ""; double v = Math.Abs((double)n);
-        string[] units = ["Б", "КиБ", "МиБ", "ГиБ", "ТиБ"]; int i = 0;
+        string[] units = ["Б", "КБ", "МБ", "ГБ", "ТБ"]; int i = 0;
         while (v >= 1024 && i < units.Length - 1) { v /= 1024; i++; }
         return prefix + (n < 0 ? "−" : "") + v.ToString(i > 0 ? "0.##" : "0", CultureInfo.GetCultureInfo("ru-RU")) + " " + units[i];
     }
@@ -245,20 +245,36 @@ internal sealed class MainForm : Form
         drivePicker.SelectedItem = m.Config.Root;
         var disk = new DriveButton { Width = 195, Height = 38, AccessibleName = "Выбрать диск" };
         var updates = new HeaderIcon(false) { Width = 44, AccessibleName = "Обновления приложения" };
-        var diskMenu = MenuArt.Create();
+        var diskMenu = new ContextMenuStrip {
+            ShowCheckMargin=true, ShowImageMargin=false, Renderer=new DriveMenuRenderer()
+        };
+        disk.ContextMenuStrip=diskMenu;
         string DriveText(string drive) {
             try { var label = new DriveInfo(drive).VolumeLabel; return (string.IsNullOrWhiteSpace(label) ? "Диск" : label) + " (" + drive.TrimEnd('\\') + ")"; }
             catch (IOException) { return drive; }
         }
         void SetDiskTitle() => disk.Text = DriveText((string)drivePicker.SelectedItem!);
-        disk.Click += (_,_) => {
-            diskMenu.Items.Clear();
-            foreach (var item in DriveInfo.GetDrives().Where(d => d.DriveType is DriveType.Fixed or DriveType.Removable && d.IsReady)) {
-                string drive = item.Name;
-                diskMenu.Items.Add(DriveText(drive), null, (_,_) => { if (!drivePicker.Items.Contains(drive)) drivePicker.Items.Add(drive); drivePicker.SelectedItem = drive; });
+        diskMenu.Opening += (_,e) => {
+            diskMenu.BackColor=Theme.Panel;
+            diskMenu.ForeColor=Theme.Ink;
+            diskMenu.Font=disk.Font;
+            diskMenu.Padding=new Padding(3);
+            diskMenu.MinimumSize=new Size(disk.Width,0);
+            while(diskMenu.Items.Count!=0) diskMenu.Items[0].Dispose();
+            foreach(var item in DriveInfo.GetDrives().Where(d=>d.DriveType is DriveType.Fixed or DriveType.Removable && d.IsReady)) {
+                string drive=item.Name;
+                var option=new ToolStripMenuItem(DriveText(drive),null,(_,_)=>{
+                    if(!drivePicker.Items.Contains(drive)) drivePicker.Items.Add(drive);
+                    drivePicker.SelectedItem=drive;
+                }) {
+                    Checked=string.Equals(drive,drivePicker.SelectedItem as string,StringComparison.OrdinalIgnoreCase),
+                    Padding=new Padding(2,5,10,5)
+                };
+                diskMenu.Items.Add(option);
             }
-            diskMenu.Show(disk,0,disk.Height);
+            e.Cancel=diskMenu.Items.Count==0;
         };
+        disk.Click += (_,_) => diskMenu.Show(disk,0,disk.Height);
         SetDiskTitle(); drivePicker.SelectedIndexChanged += (_,_) => SetDiskTitle();
         header.Resize += (_,_) => { disk.Location = new(header.Width-249,10); updates.Location = new(header.Width-303,10); };
         var tips = new ToolTip(); tips.SetToolTip(settings,"Настройки"); tips.SetToolTip(updates,"Проверить обновления"); tips.SetToolTip(disk,"Выбрать диск");
@@ -386,8 +402,16 @@ internal sealed class MainForm : Form
     {
         mode.SelectedIndex=4;
         while (refreshing || folderTree.IsLoading) await Task.Delay(60);
-        using var frame=new Bitmap(Width,Height);
-        DrawToBitmap(frame,new Rectangle(0,0,Width,Height));
+        await folderTree.ExpandDemoPath("users","demo","downloads");
+        var grid=folderTree.Grid;
+        if(grid.Rows.Count is >0 and <=14) {
+            int treeHeight=grid.ColumnHeadersHeight+grid.Rows.GetRowsHeight(DataGridViewElementStates.Visible)+2;
+            ClientSize=new Size(ClientSize.Width,ClientSize.Height+Math.Max(0,treeHeight-grid.Height));
+        }
+        var content=Controls.OfType<TableLayoutPanel>().Single();
+        content.PerformLayout();
+        using var frame=new Bitmap(content.Width,content.Height);
+        content.DrawToBitmap(frame,content.ClientRectangle);
         frame.Save(destination,System.Drawing.Imaging.ImageFormat.Png);
     }
 
@@ -677,7 +701,3 @@ internal sealed class MainForm : Form
         catch (Exception ex) { MessageBox.Show(owner, "Не удалось открыть папку:\n" + ex.Message, "Крошка", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
     }
 }
-
-
-
-

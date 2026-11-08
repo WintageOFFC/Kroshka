@@ -41,10 +41,6 @@ internal sealed class HeaderIcon(bool settings) : SoftButton
                 teeth.Add(new(x+(float)Math.Cos(a)*radius,y+(float)Math.Sin(a)*radius));
             }
             outline.AddPolygon(teeth.ToArray()); g.DrawPath(pen,outline); g.DrawEllipse(pen,x-3,y-3,6,6);
-            using var bow = new SolidBrush(Color.FromArgb(93,213,145));
-            var bowState=g.Save(); g.TranslateTransform(x+8,y-11); g.RotateTransform(45); g.TranslateTransform(-x-8,-y+11);
-            g.FillPolygon(bow,new PointF[]{new(x+1,y-14),new(x+9,y-11),new(x+1,y-7)});
-            g.FillPolygon(bow,new PointF[]{new(x+16,y-15),new(x+8,y-11),new(x+16,y-7)}); g.Restore(bowState);
         } else {
             g.DrawLine(pen,x,y-10,x,y+3); g.DrawLines(pen,new PointF[]{new(x-5,y-2),new(x,y+3),new(x+5,y-2)});
             g.DrawLines(pen,new PointF[]{new(x-8,y+4),new(x-8,y+8),new(x+8,y+8),new(x+8,y+4)});

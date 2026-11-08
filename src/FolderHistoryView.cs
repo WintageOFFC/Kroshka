@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Drawing.Drawing2D;
 
 namespace Kroshka;
 
@@ -28,6 +29,10 @@ internal sealed class FolderHistoryView : UserControl
         public List<FolderEntry>? Cached;
     }
     const int PageSize = 250;
+    readonly Font bodyFont = new("Consolas", 9, FontStyle.Regular);
+    readonly Font headerFont = new("Consolas", 9, FontStyle.Bold);
+    const int Indent = 16, GlyphWidth = 21;
+
     sealed record More(Node Parent);
     readonly SoftButton reload = new() { Text = "Обновить", Width = 112, Dock = DockStyle.Right, Height = 30 };
     readonly Label comparison = new() { AutoEllipsis=true, Dock = DockStyle.Fill, ForeColor = Theme.Mint, Font = Theme.Font(9), TextAlign = ContentAlignment.MiddleLeft };
@@ -63,8 +68,9 @@ internal sealed class FolderHistoryView : UserControl
         explanation.SetToolTip(showRemoved, "Удалённые файлы скрыты в текущем периоде. Их история и исторические итоги сохранены. В прошлых периодах они всегда видны.");
         explanation.SetToolTip(comparison, "На диске — реальный замер свободного места Windows.\nВ таблице — оценка вклада файлов по их размерам.\nВезде плюс освобождает место, минус занимает.");
         Grid.Dock = DockStyle.Fill; Grid.BackgroundColor = Theme.Surface; Grid.BorderStyle = BorderStyle.None;
-        Grid.EnableHeadersVisualStyles = false; Grid.ColumnHeadersDefaultCellStyle = new() { BackColor = Theme.Panel, SelectionBackColor=Theme.Panel, SelectionForeColor=Theme.Muted, ForeColor = Theme.Muted, Font = Theme.Font(9, true) };
-        Grid.DefaultCellStyle = new() { BackColor = Theme.Panel, ForeColor = Theme.Ink, SelectionBackColor = Theme.Line, SelectionForeColor = Theme.Mint, Font = Theme.Font(9) };
+        Grid.EnableHeadersVisualStyles = false; Grid.ColumnHeadersDefaultCellStyle = new() { BackColor = Theme.Panel, SelectionBackColor=Theme.Panel, SelectionForeColor=Theme.Muted, ForeColor = Theme.Muted, Font = headerFont };
+        Grid.DefaultCellStyle = new() { BackColor = Theme.Panel, ForeColor = Theme.Ink, SelectionBackColor = Theme.Line, SelectionForeColor = Theme.Mint, Font = bodyFont };
+        Grid.RowsDefaultCellStyle.Font=bodyFont;
         Grid.GridColor = Theme.Line; Grid.RowTemplate.Height = 31; Grid.ColumnHeadersHeight = 32; Grid.RowHeadersVisible = false;
         Grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
         Grid.AllowUserToAddRows = Grid.AllowUserToDeleteRows = false; Grid.ReadOnly = true; Grid.MultiSelect = true;
@@ -79,7 +85,7 @@ internal sealed class FolderHistoryView : UserControl
         Grid.CellClick += async (_, e) =>
         {
             if (e.RowIndex < 0 || e.ColumnIndex != 0 || ModifierKeys != Keys.None) return;
-            // Only the [+] / [-] glyph expands. Clicking the filename selects it.
+            // Only the arrow expands. Clicking the filename selects it.
             if (Grid.Rows[e.RowIndex].Tag is Node hit && !OnExpander(hit)) return;
             if (Grid.Rows[e.RowIndex].Tag is Node n) await Toggle(n);
             else if (Grid.Rows[e.RowIndex].Tag is More more) await LoadMore(more.Parent);
@@ -176,6 +182,18 @@ internal sealed class FolderHistoryView : UserControl
         finally { if (!IsDisposed && version == revision) { IsLoading = false; reload.Enabled = true; SnapshotChanged?.Invoke(this, EventArgs.Empty); } }
     }
 
+    internal async Task ExpandDemoPath(params string[] names)
+    {
+        if(!Program.Preview)return;
+        var current=root;
+        foreach(string name in names) {
+            current=current?.Children?.FirstOrDefault(n=>n.Entry.Directory &&
+                string.Equals(Path.GetFileName(n.Entry.Path),name,StringComparison.OrdinalIgnoreCase));
+            if(current==null)return;
+            if(!current.Expanded)await Toggle(current);
+        }
+    }
+
     async Task Toggle(Node node)
     {
         if (!node.Entry.Directory || node.Loading) return;
@@ -209,8 +227,8 @@ internal sealed class FolderHistoryView : UserControl
     bool OnExpander(Node node)
     {
         int left = Grid.GetCellDisplayRectangle(0, Grid.CurrentRow?.Index ?? 0, false).Left;
-        if(Theme.Vintage) return Grid.PointToClient(Cursor.Position).X <= left+15+14*node.Depth;
-        return Grid.PointToClient(Cursor.Position).X <= left + 5 + (node.Depth * 3 + 4) * TextRenderer.MeasureText(" ", Grid.DefaultCellStyle.Font, Size.Empty, TextFormatFlags.NoPadding).Width;
+        int x = Grid.PointToClient(Cursor.Position).X - (left + 5 + Indent * node.Depth);
+        return x >= 0 && x < GlyphWidth;
     }
     List<string> SelectedFiles() => Grid.SelectedRows.Cast<DataGridViewRow>()
         .Where(r => r.Tag is Node n && !n.Entry.Directory).Select(r => ((Node)r.Tag!).Entry.Path).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -251,16 +269,24 @@ internal sealed class FolderHistoryView : UserControl
     void PaintLoading(object? sender, DataGridViewCellPaintingEventArgs e)
     {
         if (e.RowIndex < 0 || e.ColumnIndex != 0 || Grid.Rows[e.RowIndex].Tag is not Node n) return;
-        if (Theme.Vintage && n.Entry.Directory) {
-            e.Paint(e.ClipBounds,e.PaintParts & ~DataGridViewPaintParts.ContentForeground); e.Handled=true;
-            var g=e.Graphics!; var box=e.CellBounds; int x=box.Left+5+14*n.Depth,y=box.Top+box.Height/2;
-            using var ink=new SolidBrush(Theme.Ink);
-            Point[] arrow=n.Expanded ? [new(x,y-2),new(x+8,y-2),new(x+4,y+3)] : [new(x+1,y-4),new(x+1,y+4),new(x+6,y)];
-            g.FillPolygon(ink,arrow); x+=13;
-            using var gold=new SolidBrush(Color.Gold);
-            g.FillRectangle(gold,x,y-5,7,4);g.FillRectangle(gold,x,y-3,15,10);g.DrawRectangle(Pens.SaddleBrown,x,y-3,15,10);
-            string title=n.Depth==0?n.Entry.Path.TrimEnd((char)92)+(char)92:Path.GetFileName(n.Entry.Path);
-            TextRenderer.DrawText(g,title,Grid.DefaultCellStyle.Font,new Rectangle(x+19,box.Top,Math.Max(1,box.Right-x-19),box.Height),Theme.Ink,TextFormatFlags.Left|TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis);
+        if (n.Entry.Directory) {
+            e.Paint(e.ClipBounds, e.PaintParts & ~DataGridViewPaintParts.ContentForeground);
+            e.Handled = true;
+            var g = e.Graphics!;
+            var box = e.CellBounds;
+            var state = g.Save();
+            g.SetClip(Rectangle.Intersect(e.ClipBounds,box),CombineMode.Intersect);
+            int x = box.Left + 5 + Indent*n.Depth, y = box.Top + box.Height/2;
+            using var ink = new SolidBrush(Theme.Ink);
+            Point[] arrow = n.Expanded ? [new(x,y-2),new(x+8,y-2),new(x+4,y+3)] : [new(x+1,y-4),new(x+1,y+4),new(x+6,y)];
+            g.FillPolygon(ink,arrow);
+            x += GlyphWidth;
+            DrawFolder(g,x,y);
+            var title = n.Depth==0 ? n.Entry.Path.TrimEnd((char)92)+(char)92 : Path.GetFileName(n.Entry.Path);
+            var textBox = new Rectangle(x+20,box.Top,Math.Max(1,box.Right-x-20-(n.Loading?34:0)),box.Height);
+            TextRenderer.DrawText(g,title,bodyFont,textBox,Theme.Ink,TextFormatFlags.Left|TextFormatFlags.VerticalCenter|
+                TextFormatFlags.EndEllipsis|TextFormatFlags.NoPrefix|TextFormatFlags.PreserveGraphicsClipping);
+            g.Restore(state);
         }
         if (!n.Loading) return;
         if (!e.Handled) { e.Paint(e.ClipBounds,e.PaintParts); e.Handled=true; }
@@ -268,9 +294,33 @@ internal sealed class FolderHistoryView : UserControl
         using var back = new SolidBrush(Grid.Rows[e.RowIndex].Selected ? Theme.Line : Theme.Panel); e.Graphics!.FillRectangle(back, area);
         LoadingMascot.Draw(e.Graphics, area, frame * 15);
     }
+    static void DrawFolder(Graphics g,int x,int y)
+    {
+        if(Theme.Vintage) {
+            g.FillRectangle(Brushes.Gold,x,y-5,7,4);
+            g.FillRectangle(Brushes.Gold,x,y-3,15,10);
+            g.DrawRectangle(Pens.SaddleBrown,x,y-3,15,10);
+            return;
+        }
+        Point[] outline=[new(x,y-5),new(x+6,y-5),new(x+8,y-3),new(x+15,y-3),new(x+15,y+6),new(x,y+6)];
+        g.SmoothingMode=SmoothingMode.AntiAlias;
+        if(Theme.Style=="Modern") {
+            using var gradient=new LinearGradientBrush(new Rectangle(x,y-5,16,12),Theme.Mint,Color.FromArgb(178,144,246),35f);
+            g.FillPolygon(gradient,outline);
+        }
+        using var edge=new Pen(Theme.Mint,1.35f);
+        g.DrawPolygon(edge,outline);
+    }
+
     void UpdateStatus() => explanation.SetToolTip(reload, $"{HistoryPeriod.Local(from):dd.MM.yy HH:mm} → {HistoryPeriod.Local(to):dd.MM.yy HH:mm} · по журналу, возможны пропуски");
 
-    public void Restyle() => Render();
+    public void Restyle()
+    {
+        Grid.DefaultCellStyle.Font=bodyFont;
+        Grid.ColumnHeadersDefaultCellStyle.Font=headerFont;
+        Grid.RowsDefaultCellStyle.Font=bodyFont;
+        Render();
+    }
     void Render()
     {
         if (root == null || IsDisposed) return;
@@ -285,7 +335,7 @@ internal sealed class FolderHistoryView : UserControl
             if (HideRemoved(n.Entry.Path, n.Entry.Directory, requested.To, showRemoved.Checked, removedNow, n.Entry.ExistsNow)) return;
             string name = n.Depth == 0 ? n.Entry.Path + "\\" : Path.GetFileName(n.Entry.Path);
             if (!n.Entry.Directory && (!n.Entry.ExistsNow || removedNow.Contains(n.Entry.Path))) name += "  [удалён сейчас]";
-            int index = AddRow(new string(' ', n.Depth * 3) + (n.Entry.Directory ? Theme.Style == "Classic" ? (n.Expanded ? "[-] " : "[+] ") : (n.Expanded ? "▼ " : "▶ ") : "    ") + name, n.Entry.Before < 0 ? null : (object)n.Entry.Before, n.Entry.After < 0 ? null : (object)n.Entry.After, n.Entry.FreeSpaceEffect);
+            int index = AddRow(new string(' ', n.Depth * 3) + (n.Entry.Directory ? (n.Expanded ? "▼ " : "▶ ") : "    ") + name, n.Entry.Before < 0 ? null : (object)n.Entry.Before, n.Entry.After < 0 ? null : (object)n.Entry.After, n.Entry.FreeSpaceEffect);
             var row = prepared[index]; row.Tag = n; row.Cells[0].ToolTipText = n.Entry.Path;
             row.Cells[3].Style.ForeColor = n.Entry.FreeSpaceEffect < 0 ? Theme.Pink : Theme.Mint;
             if (!n.Entry.Directory && (!n.Entry.ExistsNow || removedNow.Contains(n.Entry.Path))) { row.Cells[0].Style.ForeColor = Theme.Muted; row.Cells[0].ToolTipText += "\nФайл удалён сейчас. Размеры относятся к выбранному историческому интервалу."; }
@@ -310,6 +360,6 @@ internal sealed class FolderHistoryView : UserControl
         foreach (DataGridViewRow row in Grid.Rows) if (row.Tag is Node n && selected.Contains(n.Entry.Path)) row.Selected = true;
         Grid.ResumeLayout(); UpdateAnimation();
     }
-    protected override void Dispose(bool disposing) { revision++; if (disposing) { animation.Dispose(); explanation.Dispose(); Grid.ContextMenuStrip?.Dispose(); } base.Dispose(disposing); }
+    protected override void Dispose(bool disposing) { revision++; if (disposing) { animation.Dispose(); explanation.Dispose(); Grid.ContextMenuStrip?.Dispose(); headerFont.Dispose(); bodyFont.Dispose(); } base.Dispose(disposing); }
 }
 
