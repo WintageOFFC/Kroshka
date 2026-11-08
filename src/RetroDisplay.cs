@@ -22,7 +22,7 @@ internal static class RetroDisplay
             {
                 var (a,b,c,d)=segments[s]; bool on=(Masks[ch-'0']&(1<<s))!=0;
                 if(on){using var glow=new Pen(Color.FromArgb(22,color),stroke+6*unit);g.DrawLine(glow,x+a*unit,y+b*unit,x+c*unit,y+d*unit);}
-                using var ink=new Pen(on?color:Color.FromArgb(24,52,41),stroke){StartCap=LineCap.Square,EndCap=LineCap.Square};
+                using var ink=new Pen(on?color:(Theme.Vintage ? Color.FromArgb(39,50,69) : Color.FromArgb(24,52,41)),stroke){StartCap=LineCap.Square,EndCap=LineCap.Square};
                 g.DrawLine(ink,x+a*unit,y+b*unit,x+c*unit,y+d*unit);
             }
             x+=width+gap;
@@ -36,6 +36,7 @@ internal static class RetroDisplay
     }
     public static void ApplyWindow(Form form)
         {
+            form.Icon=ThemeArt.WindowIcon();
             try { int dark=Theme.Style=="Vintage"?0:1,corners=Theme.Style=="Modern"?2:1,bg=ColorTranslator.ToWin32(Theme.Vintage?Color.Navy:Theme.Bg),ink=ColorTranslator.ToWin32(Theme.Vintage?Color.White:Theme.Mint),line=ColorTranslator.ToWin32(Theme.Line);
                 int backdrop=Theme.Style=="Modern"?3:1; DwmSetWindowAttribute(form.Handle,38,ref backdrop,4);
                 DwmSetWindowAttribute(form.Handle,33,ref corners,4);
@@ -55,7 +56,18 @@ internal sealed class LedTitle : Control
     public LedTitle(){DoubleBuffered=true;Size=new Size(295,42);AccessibleName="Крошка";}
     protected override void OnPaint(PaintEventArgs e)
     {
-        e.Graphics.Clear(Theme.Vintage?Color.FromArgb(4,16,10):Theme.Bg);using var on=new SolidBrush(Theme.Phosphor);using var off=new SolidBrush(Color.FromArgb(14,39,29));using var glow=new SolidBrush(Color.FromArgb(20,Theme.Mint));
+        e.Graphics.Clear(Parent?.BackColor ?? Theme.Bg);
+        if(Theme.Vintage) {
+            using var fill=new SolidBrush(Theme.Mint);
+            using var outline=new Pen(Color.FromArgb(23,31,61),0.7f);
+            for(int c=0;c<Glyphs.Length;c++) for(int i=0;i<35;i++) {
+                if(Glyphs[c][i]!='1')continue;
+                var cell=new Rectangle(c*32+i%5*5+1,3+i/5*5,4,4);
+                e.Graphics.FillRectangle(fill,cell); e.Graphics.DrawRectangle(outline,cell);
+            }
+            return;
+        }
+        using var on=new SolidBrush(Theme.Phosphor);using var off=new SolidBrush(Color.FromArgb(14,39,29));using var glow=new SolidBrush(Color.FromArgb(20,Theme.Mint));
         float step=5f;for(int c=0;c<Glyphs.Length;c++)for(int i=0;i<35;i++)
         {float x=c*32+i%5*step,y=3+i/5*step;bool lit=Glyphs[c][i]=='1';if(lit)e.Graphics.FillRectangle(glow,x-1,y-1,6,6);e.Graphics.FillRectangle(lit?on:off,x,y,3.5f,3.5f);}
     }

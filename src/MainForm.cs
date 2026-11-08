@@ -18,7 +18,7 @@ internal static class Theme
     {
         Style = style is "Vintage" or "Modern" ? style : "Classic";
         string[] hex = Style switch {
-            "Vintage" => ["#c0c0c0","#d4d0c8","#858585","#111111","#343434","#075f38","#13723a","#aa4100"],
+            "Vintage" => ["#c0c0c0","#d4d0c8","#858585","#111111","#343434","#122b81","#203e91","#aa4100"],
             "Modern" => ["#172139","#293853","#475e7a","#f2f5ff","#bccbe0","#a3ecff","#d5c7ff","#ffad78"],
             _ => []
         };
@@ -26,10 +26,10 @@ internal static class Theme
         (Bg, Panel, Line, Ink, Muted, Mint, Lilac, Pink) = (c[0],c[1],c[2],c[3],c[4],c[5],c[6],c[7]);
     }
     public static bool Vintage => Style == "Vintage";
-    public static Color Surface => Vintage ? Color.White : Panel;
+    public static Color Surface => Vintage ? Color.FromArgb(230,231,234) : Panel;
     public static Color Selection => Vintage ? Color.FromArgb(197,220,242) : Line;
-    public static Color Phosphor => Vintage ? Color.FromArgb(125,255,185) : Mint;
-    public static Font Font(float n, bool bold = false) => new(Style switch { "Vintage" => "Tahoma", "Modern" => "Segoe UI", _ => "Consolas" }, n, bold ? FontStyle.Bold : FontStyle.Regular);
+    public static Color Phosphor => Vintage ? Color.FromArgb(134,181,255) : Mint;
+    public static Font Font(float n, bool bold = false) => new(Style switch { "Vintage" => bold ? "Tahoma" : "Franklin Gothic Demi", "Modern" => "Segoe UI", _ => "Consolas" }, n, bold ? FontStyle.Bold : FontStyle.Regular);
     public static string Bytes(long n, bool sign = false)
     {
         string prefix = sign && n > 0 ? "+" : ""; double v = Math.Abs((double)n);
@@ -80,10 +80,10 @@ internal sealed class Overview : Control
     public bool Collapsed { get; private set; }
     bool loading;
     int loadingFrame;
-    readonly Image? loadingImage = LoadingMascot.Load();
+
     readonly System.Windows.Forms.Timer loadingTimer = new() { Interval = 100 };
     public void SetLoading(bool value) { loading = value; loadingTimer.Enabled = loading && Visible; Invalidate(); }
-    protected override void Dispose(bool disposing) { if (disposing) { loadingTimer.Dispose(); loadingImage?.Dispose(); } base.Dispose(disposing); }
+    protected override void Dispose(bool disposing) { if (disposing) { loadingTimer.Dispose(); } base.Dispose(disposing); }
     public event EventHandler? CollapseChanged;
     public Overview()
     {
@@ -105,7 +105,7 @@ internal sealed class Overview : Control
     {
         if (Theme.Style == "Modern") { Glass.Paint(g,r); return; }
         if (Theme.Style == "Vintage") {
-            using var fill = new SolidBrush(Color.FromArgb(3,19,11)); g.FillRectangle(fill,r);
+            using var fill = new SolidBrush(Color.FromArgb(31,36,47)); g.FillRectangle(fill,r);
             using var vintageLines = new Pen(Color.FromArgb(10,Theme.Phosphor));
             for (float y=r.Top+4;y<r.Bottom-2;y+=4) g.DrawLine(vintageLines,r.Left+2,y,r.Right-2,y);
             if (r.Top>0) { using var head = new SolidBrush(Theme.Bg); g.FillRectangle(head,r.Left+2,r.Top+2,r.Width-4,36); }
@@ -137,7 +137,7 @@ internal sealed class Overview : Control
         using var heading=Theme.Font(12,true); using var note=Theme.Font(9);
         TextRenderer.DrawText(g,"Как менялось свободное место",heading,new Rectangle(20,124,Width-345,40),Theme.Ink,align);
         TextRenderer.DrawText(g,loading ? "Обновляю данные…" : Period,note,new Rectangle(Width-320,124,220,40),Theme.Muted,align);
-        if (loading) LoadingMascot.Draw(g, loadingImage, new Rectangle((int)w - 94, 131, 32, 32), loadingFrame * 15);
+        if (loading) LoadingMascot.Draw(g, new Rectangle((int)w - 94, 131, 32, 32), loadingFrame * 15);
         if (Collapsed) return;
         var plot = new RectangleF(24, 183, w - 184, 91);
         using var grid = new Pen(Theme.Line);
@@ -159,7 +159,7 @@ internal sealed class Overview : Control
             g.FillEllipse(halo, last.X - 6, last.Y - 6, 12, 12); g.FillEllipse(dotInk, last.X - 3, last.Y - 3, 6, 6);
             float badgeY = Math.Clamp(last.Y - 21, plot.Top, plot.Bottom - 42);
             var badge = new RectangleF(plot.Right + 12, badgeY, 134, 42);
-            using var badgeBg = new SolidBrush(Theme.Vintage ? Color.Black : Theme.Bg); using var badgeBorder = new Pen(Theme.Phosphor);
+            using var badgeBg = new SolidBrush(Theme.Vintage ? Color.FromArgb(31,36,47) : Theme.Bg); using var badgeBorder = new Pen(Theme.Phosphor);
             g.FillRectangle(badgeBg, badge); g.DrawRectangle(badgeBorder, badge.X, badge.Y, badge.Width, badge.Height);
             g.DrawLine(badgeBorder, last.X + 4, last.Y, badge.Left, badge.Top + badge.Height / 2);
             TextAt(g, Theme.Bytes((long)Points[^1][1]!), 11, Theme.Phosphor, badge.Left + 7, badge.Top + 3, true);
@@ -197,7 +197,7 @@ internal sealed class MainForm : Form
     readonly SoftButton scan = new() { Text = "Сверить", Width = 112 };
     readonly ScanProgress scanProgress = new();
     readonly System.Windows.Forms.Timer progressRefresh = new() { Interval = 1000 };
-    readonly Image? mascot = LoadMascot();
+
     readonly NotifyIcon tray;
     readonly System.Windows.Forms.Timer refresh = new() { Interval = 10000 };
     readonly System.Windows.Forms.Timer debounce = new() { Interval = 300 };
@@ -222,14 +222,17 @@ internal sealed class MainForm : Form
         monitor = primary = m; monitors[m.Config.Root] = m; Text = "Крошка " + Program.Version + " — история места на диске"; BackColor = Theme.Bg; ForeColor = Theme.Ink;
         RetroDisplay.Window(this);
         Font = Theme.Font(10); ClientSize = new Size(1100, 830); MinimumSize = new Size(1040, 780); StartPosition = FormStartPosition.CenterScreen;
-        Icon = MakeIcon();
+        Icon = ThemeArt.WindowIcon();
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(24, 16, 24, 18), RowCount = 7, ColumnCount = 1, BackColor = Theme.Bg };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 77)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 325));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); Controls.Add(root);
         var header = new Panel { Dock = DockStyle.Fill };
-        header.Paint += (_, e) => { if (mascot != null) { e.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic; e.Graphics.DrawImage(mascot, new Rectangle(0, 0, 70, 70)); } else DrawMascot(e.Graphics, 6, 4); };
+        header.Paint += (_, e) => {
+            e.Graphics.InterpolationMode=InterpolationMode.HighQualityBicubic;
+            e.Graphics.DrawImage(ThemeArt.Picture("Mascot"),new Rectangle(0,0,70,70));
+        };
         var title = new LedTitle { Location = new Point(83, 0), Width = 195 };
         var version = new Label { Text = "v" + Program.Version, AutoSize = true, Location = new Point(286, 14), ForeColor = Theme.Mint, Font = Theme.Font(13) };
         subtitle.Text = Program.Preview ? "DEMO // ВЫМЫШЛЕННЫЕ ДАННЫЕ" : "МОНИТОР ДИСКА // ЛОКАЛЬНАЯ ИСТОРИЯ";
@@ -340,7 +343,7 @@ internal sealed class MainForm : Form
         menu.Items.Add("Пауза / продолжить", null, (_, _) => { if (monitor.Config.Monitoring) monitor.TogglePause(); });
         menu.Items.Add(new ToolStripSeparator()); menu.Items.Add("Выйти", null, (_, _) => { exiting = true; Close(); }); tray.ContextMenuStrip = menu;
         FormClosing += (_, e) => { if (!exiting && e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); } };
-        FormClosed += (_, _) => { foreach (var extra in monitors.Values.Where(x => x != primary)) extra.Dispose(); refresh.Stop(); debounce.Stop(); progressRefresh.Dispose(); mascot?.Dispose(); tray.Dispose(); };
+        FormClosed += (_, _) => { foreach (var extra in monitors.Values.Where(x => x != primary)) extra.Dispose(); refresh.Stop(); debounce.Stop(); progressRefresh.Dispose(); tray.Dispose(); };
         Shown += async (_, _) => {
             foreach (string drive in primary.Config.ExtraDrives.ToArray())
                 if (drivePicker.Items.Contains(drive)) { try { GetMonitor(drive); } catch (Exception ex) { health.Text = "Диск " + drive + ": " + ex.Message; } }
@@ -426,30 +429,6 @@ internal sealed class MainForm : Form
     void UpdatePeriodButtons()
     {
         foreach (var (name, button) in periodButtons) { button.Accent = preset == name ? Theme.Mint : Theme.Panel; button.ForeColor = preset == name ? Theme.Bg : Theme.Ink; button.Invalidate(); }
-    }
-    static void DrawMascot(Graphics g, int x, int y)
-    {
-        g.SmoothingMode = SmoothingMode.AntiAlias;
-        using var body = new SolidBrush(Theme.Mint); using var dark = new SolidBrush(Theme.Bg); using var pink = new SolidBrush(Theme.Pink);
-        using var path = Theme.Round(new RectangleF(x, y + 9, 48, 45), 18); g.FillPath(body, path);
-        g.FillEllipse(body, x + 6, y, 14, 22); g.FillEllipse(body, x + 29, y, 14, 22);
-        g.FillEllipse(dark, x + 14, y + 26, 4, 5); g.FillEllipse(dark, x + 30, y + 26, 4, 5);
-        using var pen = new Pen(Theme.Bg, 1.5f); g.DrawArc(pen, x + 20, y + 29, 8, 7, 0, 180);
-        g.FillEllipse(pink, x + 8, y + 33, 7, 4); g.FillEllipse(pink, x + 35, y + 33, 7, 4);
-    }
-    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr h);
-    static Icon MakeIcon()
-    {
-        using var iconStream = typeof(MainForm).Assembly.GetManifestResourceStream("Kroshka.AppIcon");
-        if (iconStream != null) { using var savedIcon = new Icon(iconStream); return (Icon)savedIcon.Clone(); }
-        using var b = new Bitmap(64, 64); using var g = Graphics.FromImage(b); DrawMascot(g, 8, 3);
-        var h = b.GetHicon(); using var original = Icon.FromHandle(h); var copy = (Icon)original.Clone(); DestroyIcon(h); return copy;
-    }
-    static Image? LoadMascot()
-    {
-        using var stream = typeof(MainForm).Assembly.GetManifestResourceStream("Kroshka.Mascot");
-        if (stream == null) return null;
-        using var original = Image.FromStream(stream); return new Bitmap(original);
     }
     void RefreshProgress()
     {
@@ -678,6 +657,7 @@ internal sealed class MainForm : Form
                 var old=Theme.Colors(); primary.Config.Appearance=id;
                 if(!Program.Preview) primary.Config.Save(primary.DataDir);
                 Theme.Select(id); Appearance.Apply(this,old); Appearance.Apply(f,old);
+                tray.Icon=Icon;
                 foreach(var row in tableData) Appearance.Row(row,old);
                 search.BackColor=search.Parent!.BackColor=Theme.Surface;
                 folderTree.Restyle(); UpdatePeriodButtons();

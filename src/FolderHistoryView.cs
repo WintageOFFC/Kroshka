@@ -33,12 +33,10 @@ internal sealed class FolderHistoryView : UserControl
     readonly Label comparison = new() { AutoEllipsis=true, Dock = DockStyle.Fill, ForeColor = Theme.Mint, Font = Theme.Font(9), TextAlign = ContentAlignment.MiddleLeft };
     readonly ToolTip explanation = new();
     readonly System.Windows.Forms.Timer animation = new() { Interval = 100 };
-    readonly Image? loadingMascot = LoadingMascot.Load();
     int frame;
     bool deleting;
     readonly CheckBox showRemoved = new() { Text = "Показать удалённые", Dock = DockStyle.Right, Width = 185, ForeColor = Theme.Muted, Font = Theme.Font(9), FlatStyle = FlatStyle.Flat };
     HashSet<string> removedNow = new(StringComparer.OrdinalIgnoreCase);
-    readonly Image? deleteIcon = MenuArt.Load("MenuRecycle"), locationIcon = MenuArt.Load("MenuLocation");
     public Func<IReadOnlyList<string>, string, Task>? FilesRemoved { get; set; }
     public static bool HideRemoved(string path, bool directory, long periodEnd, bool show, ISet<string> removed, bool existsNow = true) =>
         !directory && !show && periodEnd > Store.Now && (!existsNow || removed.Contains(path));
@@ -96,12 +94,13 @@ internal sealed class FolderHistoryView : UserControl
         animation.Tick += (_, _) => { frame = (frame + 1) % 24; foreach (DataGridViewRow row in Grid.Rows) if (row.Tag is Node n && n.Loading) Grid.InvalidateCell(0, row.Index); };
         VisibleChanged += (_, _) => UpdateAnimation();
         var menu = MenuArt.Create();
-        var openLocation = menu.Items.Add("Открыть расположение", locationIcon);
+        var openLocation = menu.Items.Add("Открыть расположение", ThemeArt.Picture("MenuLocation"));
         openLocation.Padding = new Padding(5, 4, 8, 4);
         menu.Items.Add(new ToolStripSeparator());
-        var delete = menu.Items.Add("Переместить в корзину…", deleteIcon);
+        var delete = menu.Items.Add("Переместить в корзину…", ThemeArt.Picture("MenuRecycle"));
         delete.Padding = new Padding(5, 4, 8, 4);
         menu.Opening += (_, _) => {
+            openLocation.Image=ThemeArt.Picture("MenuLocation"); delete.Image=ThemeArt.Picture("MenuRecycle");
             delete.Enabled = !Program.Preview && !deleting && SelectedFiles().Count > 0 && !Grid.SelectedRows.Cast<DataGridViewRow>().Any(r => r.Tag is Node n && n.Entry.Directory);
             openLocation.Enabled = Grid.CurrentRow?.Tag is Node;
         };
@@ -267,7 +266,7 @@ internal sealed class FolderHistoryView : UserControl
         if (!e.Handled) { e.Paint(e.ClipBounds,e.PaintParts); e.Handled=true; }
         var area = new Rectangle(e.CellBounds.Right - 34, e.CellBounds.Top + 1, 29, 29);
         using var back = new SolidBrush(Grid.Rows[e.RowIndex].Selected ? Theme.Line : Theme.Panel); e.Graphics!.FillRectangle(back, area);
-        LoadingMascot.Draw(e.Graphics, loadingMascot, area, frame * 15);
+        LoadingMascot.Draw(e.Graphics, area, frame * 15);
     }
     void UpdateStatus() => explanation.SetToolTip(reload, $"{HistoryPeriod.Local(from):dd.MM.yy HH:mm} → {HistoryPeriod.Local(to):dd.MM.yy HH:mm} · по журналу, возможны пропуски");
 
@@ -311,6 +310,6 @@ internal sealed class FolderHistoryView : UserControl
         foreach (DataGridViewRow row in Grid.Rows) if (row.Tag is Node n && selected.Contains(n.Entry.Path)) row.Selected = true;
         Grid.ResumeLayout(); UpdateAnimation();
     }
-    protected override void Dispose(bool disposing) { revision++; if (disposing) { animation.Dispose(); loadingMascot?.Dispose(); deleteIcon?.Dispose(); locationIcon?.Dispose(); explanation.Dispose(); Grid.ContextMenuStrip?.Dispose(); } base.Dispose(disposing); }
+    protected override void Dispose(bool disposing) { revision++; if (disposing) { animation.Dispose(); explanation.Dispose(); Grid.ContextMenuStrip?.Dispose(); } base.Dispose(disposing); }
 }
 
