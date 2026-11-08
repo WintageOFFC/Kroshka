@@ -1,0 +1,37 @@
+name: Windows release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build and check version
+        shell: pwsh
+        run: |
+          $version = ([xml](Get-Content -Raw src/Kroshka.csproj)).Project.PropertyGroup.Version
+          if ("v$version" -ne $env:GITHUB_REF_NAME) { throw "Tag and application version differ" }
+          dotnet publish src/Kroshka.csproj -c Release -r win-x64 --self-contained true -o release-app --source https://api.nuget.org/v3/index.json -p:DebugType=None
+      - name: Test
+        shell: pwsh
+        run: |
+          $p = Start-Process -Wait -PassThru release-app/Kroshka.exe -ArgumentList "--self-test --data qa-release"
+          Get-Content qa-release/test-results.txt
+          if ($p.ExitCode) { throw "Self-test failed" }
+      - name: Package
+        shell: pwsh
+        run: |
+          $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          & $compiler ("/DAppVersion=" + $env:GITHUB_REF_NAME.Substring(1)) setup.iss
+          if ($LASTEXITCODE) { throw "Installer build failed" }
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: gh release create $env:GITHUB_REF_NAME (Get-Item dist/*.exe).FullName --verify-tag --title "Крошка $env:GITHUB_REF_NAME" --notes "Установщик для Windows x64. Включает .NET Desktop Runtime."

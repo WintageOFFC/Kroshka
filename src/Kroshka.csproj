@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>../assets/kroshka.ico</ApplicationIcon>
+    <AssemblyName>Kroshka</AssemblyName>
+    <Version>1.4.6</Version>
+    <PlatformTarget>x64</PlatformTarget>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <RestoreIgnoreFailedSources>true</RestoreIgnoreFailedSources>
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="../assets/menu-recycle.png" LogicalName="Kroshka.MenuRecycle" />
+    <EmbeddedResource Include="../assets/menu-location.png" LogicalName="Kroshka.MenuLocation" />
+    <EmbeddedResource Include="../assets/loading-chibi.png" LogicalName="Kroshka.Loading" />
+    <EmbeddedResource Include="../assets/mascot-ui.png" LogicalName="Kroshka.Mascot" />
+    <EmbeddedResource Include="../assets/kroshka.ico" LogicalName="Kroshka.AppIcon" />
+  </ItemGroup>
+</Project>

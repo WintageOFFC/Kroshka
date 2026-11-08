@@ -1,0 +1,7 @@
+app/
+src/bin/
+src/obj/
+.build-home/
+qa*/
+preview-data/
+design-preview/
